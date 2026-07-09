@@ -3,7 +3,7 @@ services:
     name: pollo-tool
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 4 --threads 8 --timeout 300 --worker-class gthread
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 4 --worker-class gevent --worker-connections 100 --timeout 300
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"

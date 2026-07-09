@@ -1,4 +1,7 @@
 """Pollo Tool — Flask mobile-first web app for Pollo AI API"""
+from gevent import monkey
+monkey.patch_all()
+
 import os, json, uuid, hashlib, random, tempfile, time, threading, logging, sys
 import requests as http_req
 from flask import Flask, render_template, request, jsonify, send_file
