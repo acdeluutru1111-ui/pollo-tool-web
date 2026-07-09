@@ -1,7 +1,15 @@
 """Pollo Tool — Flask mobile-first web app for Pollo AI API"""
-import os, json, uuid, hashlib, random, tempfile, time, threading
+import os, json, uuid, hashlib, random, tempfile, time, threading, logging, sys
 import requests as http_req
 from flask import Flask, render_template, request, jsonify, send_file
+
+# ═══════════════ LOGGING ═══════════════
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("pollo")
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB
@@ -59,13 +67,27 @@ class PolloAPI:
         return upload_file(p, self._t)
 
     def _post(self, ep, body):
-        r = http_req.post(f"{self.BASE}/{ep}", headers=self._h(), json=body, verify=False, timeout=120)
-        if r.status_code != 200:
-            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:500]}")
-        d = r.json()
-        if not d.get("id"):
-            raise RuntimeError(f"No id: {json.dumps(d)[:300]}")
-        return d
+        url = f"{self.BASE}/{ep}"
+        headers = self._h()
+        logger.info(f"POST {url}")
+        logger.debug(f"Headers: {json.dumps(headers, indent=2)}")
+        logger.debug(f"Body: {json.dumps(body, indent=2)[:2000]}")
+        try:
+            r = http_req.post(url, headers=headers, json=body, verify=False, timeout=120)
+            logger.info(f"Response {r.status_code}")
+            logger.debug(f"Response body: {r.text[:1000]}")
+            if r.status_code != 200:
+                logger.error(f"HTTP ERROR {r.status_code}: {r.text[:500]}")
+                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:500]}")
+            d = r.json()
+            if not d.get("id"):
+                logger.error(f"No id in response: {json.dumps(d)[:300]}")
+                raise RuntimeError(f"No id: {json.dumps(d)[:300]}")
+            logger.info(f"Task created: id={d['id']}")
+            return d
+        except http_req.exceptions.RequestException as e:
+            logger.error(f"Request failed: {e}")
+            raise
 
     def text2img(self, prompt, model, aspect, res, n, q):
         return self._post("generation/enhanced-text2image", {
@@ -187,22 +209,30 @@ def api_generate():
     data = request.json
     token = data.get("token","")
     mode = data.get("mode","")
+    logger.info(f"Generate request: mode={mode}")
+    logger.debug(f"Request data: {json.dumps(data, indent=2)[:1000]}")
+
     if not token:
+        logger.warning("No token provided")
         return jsonify({"error":"Token required"}), 400
 
     try:
         api = PolloAPI(token)
 
         if mode == "text2img":
+            logger.info(f"text2img: prompt={data['prompt'][:50]}... model={data['model']}")
             d = api.text2img(data["prompt"], data["model"], data["aspect"], data["resolution"],
                              int(data.get("numOutputs",1)), int(data.get("quality",100)))
         elif mode == "img2img":
+            logger.info(f"img2img: files={len(data.get('files',[]))}")
             urls = [api.up(p) for p in data.get("files",[])]
             d = api.img2img(data["prompt"], data["model"], data["aspect"], data["resolution"], urls)
         elif mode == "img2vid":
+            logger.info(f"img2vid: file={data['file']}")
             d = api.img2vid(api.up(data["file"]), data["prompt"], data["model"],
                            int(data.get("length",4)), data["aspect"], data.get("audio",True))
         elif mode == "ref2vid":
+            logger.info(f"ref2vid: images={len(data.get('images',[]))} videos={len(data.get('videos',[]))}")
             refs, order = [], 1
             for p in data.get("images",[]):
                 refs.append({"type":"image","name":f"Image {order}","image":api.up(p),"order":order})
@@ -221,18 +251,22 @@ def api_generate():
             d = api.ref2vid(refs, prompt, data["model"], int(data.get("duration",4)),
                            data["aspect"], data.get("resolution","480p"), data.get("audio",False), sv)
         elif mode == "mimic":
+            logger.info(f"mimic: image={data['image']} video={data['video']}")
             d = api.mimic(api.up(data["image"]), api.up(data["video"]),
                          data["prompt"], data["model"], data["mode_param"])
         else:
+            logger.error(f"Unknown mode: {mode}")
             return jsonify({"error":f"Unknown mode: {mode}"}), 400
 
         task_id = str(d["id"])
         tasks[task_id] = {"status":"processing","progress":0}
+        logger.info(f"Starting poll thread for task {task_id}")
         t = threading.Thread(target=_poll_task, args=(api, task_id), daemon=True)
         t.start()
         return jsonify({"task_id":task_id})
 
     except Exception as e:
+        logger.exception(f"Generate failed: {e}")
         return jsonify({"error":str(e)}), 500
 
 
@@ -246,4 +280,5 @@ def api_status(task_id):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    logger.info(f"Starting Pollo Tool on port {port}")
+    app.run(host="0.0.0.0", port=port, debug=True)
