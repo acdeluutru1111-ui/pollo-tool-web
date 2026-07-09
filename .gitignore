@@ -1,0 +1,5 @@
+__pycache__
+*.pyc
+deploy*.py
+/index.html
+Dockerfile

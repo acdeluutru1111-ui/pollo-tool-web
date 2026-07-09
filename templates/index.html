@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pollo Tool — AI Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            dark: { 50:'#f8fafc',100:'#f1f5f9',200:'#e2e8f0',300:'#94a3b8',400:'#64748b',500:'#475569',600:'#334155',700:'#1e293b',800:'#0f172a',900:'#020617' },
+            accent: { 400:'#a78bfa',500:'#8b5cf6',600:'#7c3aed',700:'#6d28d9' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+    input, select, textarea { font-size: 16px !important; }
+    .glass { background: rgba(30,41,59,0.8); backdrop-filter: blur(20px); border: 1px solid rgba(148,163,184,0.1); }
+    .glass-strong { background: rgba(30,41,59,0.95); backdrop-filter: blur(30px); border: 1px solid rgba(148,163,184,0.15); }
+    .tab-active { background: linear-gradient(135deg, #7c3aed, #6d28d9); color: white; box-shadow: 0 4px 15px rgba(139,92,246,0.4); }
+    .tab-inactive { background: rgba(30,41,59,0.5); color: #94a3b8; border: 1px solid rgba(148,163,184,0.1); }
+    .btn-primary { background: linear-gradient(135deg, #7c3aed, #6d28d9); box-shadow: 0 4px 15px rgba(139,92,246,0.4); transition: all 0.2s; }
+    .btn-primary:active { transform: scale(0.97); box-shadow: 0 2px 8px rgba(139,92,246,0.3); }
+    .input-field { background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.15); transition: border-color 0.2s; }
+    .input-field:focus { border-color: #7c3aed; outline: none; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }
+    .progress-bar { background: linear-gradient(90deg, #7c3aed, #a78bfa); transition: width 0.5s ease; }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    .shimmer { background: linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.1) 50%, transparent 100%); background-size: 200% 100%; animation: shimmer 2s infinite; }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .drop-zone { border: 2px dashed rgba(148,163,184,0.3); transition: all 0.2s; }
+    .drop-zone.dragover { border-color: #7c3aed; background: rgba(139,92,246,0.05); }
+    .result-img { max-height: 60vh; object-fit: contain; border-radius: 12px; }
+    .toast { animation: slideUp 0.3s ease, fadeOut 0.3s ease 2.7s; }
+    @keyframes slideUp { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
+    @keyframes fadeOut { to{opacity:0} }
+    select option { background: #1e293b; color: #e2e8f0; }
+  </style>
+</head>
+<body class="min-h-screen pb-20">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-50 glass-strong">
+    <div class="px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-sm font-bold">P</div>
+        <h1 class="text-lg font-bold bg-gradient-to-r from-accent-400 to-purple-400 bg-clip-text text-transparent">Pollo Tool</h1>
+      </div>
+      <button onclick="toggleToken()" class="px-3 py-1.5 rounded-lg text-xs font-medium glass" id="tokenBtn">
+        <span id="tokenLabel">Set Token</span>
+      </button>
+    </div>
+    <div id="tokenPanel" class="hidden px-4 pb-3">
+      <input type="password" id="tokenInput" placeholder="Paste your pollo.ai session token..."
+        class="w-full px-4 py-3 rounded-xl input-field text-sm">
+      <p class="text-xs text-dark-400 mt-2">DevTools → Application → Cookies → pollo.ai → session-token</p>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar" id="tabs">
+    <button onclick="switchTab('t2i')" data-tab="t2i" class="tab-btn tab-active px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex-shrink-0">Text2Img</button>
+    <button onclick="switchTab('i2i')" data-tab="i2i" class="tab-btn tab-inactive px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex-shrink-0">Img2Img</button>
+    <button onclick="switchTab('i2v')" data-tab="i2v" class="tab-btn tab-inactive px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex-shrink-0">Img2Vid</button>
+    <button onclick="switchTab('r2v')" data-tab="r2v" class="tab-btn tab-inactive px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex-shrink-0">Ref2Vid</button>
+    <button onclick="switchTab('mimic')" data-tab="mimic" class="tab-btn tab-inactive px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex-shrink-0">Mimic</button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="px-4 space-y-4" id="mainContent">
+
+    <!-- Text2Img -->
+    <section id="panel-t2i" class="panel fade-in space-y-4">
+      <div>
+        <label class="text-sm font-medium text-dark-300 mb-1.5 block">Prompt</label>
+        <textarea id="t2i-prompt" rows="3" placeholder="Describe what you want to create..."
+          class="w-full px-4 py-3 rounded-xl input-field text-sm resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Model</label>
+          <select id="t2i-model" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="nano-banana-2-google">nano-banana-2</option>
+            <option value="pollo-image-v2">pollo-image-v2</option>
+            <option value="openai-gpt-image-2-0">gpt-image-2</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Aspect</label>
+          <select id="t2i-aspect" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="1:1">1:1</option>
+            <option value="9:16" selected>9:16</option>
+            <option value="16:9">16:9</option>
+            <option value="4:3">4:3</option>
+            <option value="3:4">3:4</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Resolution</label>
+          <select id="t2i-res" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="1K" selected>1K</option>
+            <option value="720p">720p</option>
+            <option value="1080p">1080p</option>
+            <option value="2K">2K</option>
+            <option value="4K">4K</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Outputs</label>
+          <select id="t2i-num" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Quality</label>
+          <input type="range" id="t2i-quality" min="1" max="100" value="100"
+            class="w-full mt-2 accent-accent-500">
+          <span class="text-xs text-dark-400 text-center block" id="t2i-qval">100</span>
+        </div>
+      </div>
+      <button onclick="generateT2I()" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold text-sm">
+        Generate Image
+      </button>
+    </section>
+
+    <!-- Img2Img -->
+    <section id="panel-i2i" class="panel hidden space-y-4">
+      <div>
+        <label class="text-sm font-medium text-dark-300 mb-1.5 block">Upload Images</label>
+        <div class="drop-zone rounded-xl p-6 text-center" id="i2i-drop" onclick="document.getElementById('i2i-files').click()">
+          <input type="file" id="i2i-files" accept="image/*" multiple class="hidden" onchange="updateFiles('i2i')">
+          <div class="text-dark-400">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v12m6-6H6"/></svg>
+            <p class="text-sm">Tap to upload images</p>
+            <p class="text-xs mt-1 opacity-60">Max 9 images</p>
+          </div>
+        </div>
+        <div id="i2i-preview" class="flex gap-2 overflow-x-auto mt-2"></div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-dark-400 mb-1 block">Prompt</label>
+        <textarea id="i2i-prompt" rows="2" placeholder="Use [image1] [image2] as placeholders..."
+          class="w-full px-4 py-3 rounded-xl input-field text-sm resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Model</label>
+          <select id="i2i-model" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="nano-banana-2-google">nano-banana-2</option>
+            <option value="pollo-image-v2">pollo-image-v2</option>
+            <option value="openai-gpt-image-2-0">gpt-image-2</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Aspect</label>
+          <select id="i2i-aspect" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="1:1">1:1</option>
+            <option value="9:16">9:16</option>
+            <option value="16:9">16:9</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Resolution</label>
+          <select id="i2i-res" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="1K">1K</option>
+            <option value="720p">720p</option>
+            <option value="1080p">1080p</option>
+            <option value="2K">2K</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="generateI2I()" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold text-sm">
+        Generate Image
+      </button>
+    </section>
+
+    <!-- Img2Vid -->
+    <section id="panel-i2v" class="panel hidden space-y-4">
+      <div>
+        <label class="text-sm font-medium text-dark-300 mb-1.5 block">Upload Image</label>
+        <div class="drop-zone rounded-xl p-6 text-center" id="i2v-drop" onclick="document.getElementById('i2v-file').click()">
+          <input type="file" id="i2v-file" accept="image/*" class="hidden" onchange="updateSingleFile('i2v')">
+          <div class="text-dark-400">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v12m6-6H6"/></svg>
+            <p class="text-sm">Tap to upload image</p>
+          </div>
+        </div>
+        <div id="i2v-preview" class="mt-2"></div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-dark-400 mb-1 block">Prompt (optional)</label>
+        <textarea id="i2v-prompt" rows="2" placeholder="Describe the motion..."
+          class="w-full px-4 py-3 rounded-xl input-field text-sm resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Model</label>
+          <select id="i2v-model" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="seedance-2-0">seedance-2</option>
+            <option value="seedance-1-0">seedance-1</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Duration</label>
+          <select id="i2v-length" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="4" selected>4s</option>
+            <option value="5">5s</option>
+            <option value="6">6s</option>
+            <option value="8">8s</option>
+            <option value="10">10s</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Aspect</label>
+          <select id="i2v-aspect" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="9:16" selected>9:16</option>
+            <option value="16:9">16:9</option>
+            <option value="1:1">1:1</option>
+          </select>
+        </div>
+      </div>
+      <label class="flex items-center gap-3 px-4 py-3 rounded-xl input-field cursor-pointer">
+        <input type="checkbox" id="i2v-audio" checked class="w-4 h-4 accent-accent-500">
+        <span class="text-sm">Generate Audio</span>
+      </label>
+      <button onclick="generateI2V()" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold text-sm">
+        Generate Video
+      </button>
+    </section>
+
+    <!-- Ref2Vid -->
+    <section id="panel-r2v" class="panel hidden space-y-4">
+      <div>
+        <label class="text-sm font-medium text-dark-300 mb-1.5 block">Reference Images</label>
+        <div class="drop-zone rounded-xl p-6 text-center" id="r2v-img-drop" onclick="document.getElementById('r2v-imgs').click()">
+          <input type="file" id="r2v-imgs" accept="image/*" multiple class="hidden" onchange="updateFiles('r2v-img')">
+          <div class="text-dark-400">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v12m6-6H6"/></svg>
+            <p class="text-sm">Tap to upload images (max 9)</p>
+          </div>
+        </div>
+        <div id="r2v-img-preview" class="flex gap-2 overflow-x-auto mt-2"></div>
+      </div>
+      <div>
+        <label class="text-sm font-medium text-dark-300 mb-1.5 block">Reference Videos</label>
+        <div class="drop-zone rounded-xl p-6 text-center" id="r2v-vid-drop" onclick="document.getElementById('r2v-vids').click()">
+          <input type="file" id="r2v-vids" accept="video/*" multiple class="hidden" onchange="updateFiles('r2v-vid')">
+          <div class="text-dark-400">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <p class="text-sm">Tap to upload videos (max 3)</p>
+          </div>
+        </div>
+        <div id="r2v-vid-preview" class="flex gap-2 overflow-x-auto mt-2"></div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-dark-400 mb-1 block">Prompt</label>
+        <textarea id="r2v-prompt" rows="3" placeholder="[image1] walks in the park. [video1] shows the style..."
+          class="w-full px-4 py-3 rounded-xl input-field text-sm resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Model</label>
+          <select id="r2v-model" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="seedance-2-0">seedance-2</option>
+            <option value="seedance-1-0">seedance-1</option>
+            <option value="pollo-v3-0">pollo-v3</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Duration</label>
+          <select id="r2v-dur" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="4" selected>4s</option>
+            <option value="5">5s</option>
+            <option value="6">6s</option>
+            <option value="8">8s</option>
+            <option value="10">10s</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Resolution</label>
+          <select id="r2v-res" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="480p" selected>480p</option>
+            <option value="720p">720p</option>
+            <option value="1080p">1080p</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Aspect</label>
+          <select id="r2v-aspect" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="9:16" selected>9:16</option>
+            <option value="16:9">16:9</option>
+            <option value="1:1">1:1</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex items-center gap-3 px-4 py-3 rounded-xl input-field cursor-pointer">
+          <input type="checkbox" id="r2v-audio" class="w-4 h-4 accent-accent-500">
+          <span class="text-sm">Audio</span>
+        </label>
+        <div>
+          <input type="text" id="r2v-seed" placeholder="Seed (random)"
+            class="w-full px-4 py-3 rounded-xl input-field text-sm">
+        </div>
+      </div>
+      <button onclick="generateR2V()" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold text-sm">
+        Generate Video
+      </button>
+    </section>
+
+    <!-- Mimic -->
+    <section id="panel-mimic" class="panel hidden space-y-4">
+      <div>
+        <label class="text-sm font-medium text-dark-300 mb-1.5 block">Character Image</label>
+        <div class="drop-zone rounded-xl p-6 text-center" id="mimic-img-drop" onclick="document.getElementById('mimic-img').click()">
+          <input type="file" id="mimic-img" accept="image/*" class="hidden" onchange="updateSingleFile('mimic-img')">
+          <div class="text-dark-400">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v12m6-6H6"/></svg>
+            <p class="text-sm">Tap to upload character image</p>
+          </div>
+        </div>
+        <div id="mimic-img-preview" class="mt-2"></div>
+      </div>
+      <div>
+        <label class="text-sm font-medium text-dark-300 mb-1.5 block">Motion Video</label>
+        <div class="drop-zone rounded-xl p-6 text-center" id="mimic-vid-drop" onclick="document.getElementById('mimic-vid').click()">
+          <input type="file" id="mimic-vid" accept="video/*" class="hidden" onchange="updateSingleFile('mimic-vid')">
+          <div class="text-dark-400">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <p class="text-sm">Tap to upload motion video</p>
+          </div>
+        </div>
+        <div id="mimic-vid-preview" class="mt-2"></div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-dark-400 mb-1 block">Prompt (optional)</label>
+        <textarea id="mimic-prompt" rows="2" placeholder="Describe the action..."
+          class="w-full px-4 py-3 rounded-xl input-field text-sm resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Model</label>
+          <select id="mimic-model" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="kling-v3">kling-v3</option>
+            <option value="kling-v2">kling-v2</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-dark-400 mb-1 block">Mode</label>
+          <select id="mimic-mode" class="w-full px-3 py-2.5 rounded-xl input-field text-sm">
+            <option value="pro">Pro</option>
+            <option value="standard">Standard</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="generateMimic()" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold text-sm">
+        Generate Mimic
+      </button>
+    </section>
+
+    <!-- Progress / Result -->
+    <div id="result-area" class="hidden">
+      <div class="glass rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium" id="status-text">Processing...</span>
+          <span class="text-xs text-dark-400" id="progress-pct">0%</span>
+        </div>
+        <div class="w-full h-2 rounded-full bg-dark-700 overflow-hidden">
+          <div id="progress-bar" class="progress-bar h-full rounded-full" style="width:0%"></div>
+        </div>
+        <div id="result-output" class="hidden"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-4 left-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+
+  <script>
+    // State
+    let currentTab = 't2i';
+    const uploadedFiles = {};
+
+    // Tab switching
+    function switchTab(tab) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('tab-active');
+        b.classList.add('tab-inactive');
+      });
+      document.getElementById(`panel-${tab}`).classList.remove('hidden');
+      document.getElementById(`panel-${tab}`).classList.add('fade-in');
+      const btn = document.querySelector(`[data-tab="${tab}"]`);
+      btn.classList.remove('tab-inactive');
+      btn.classList.add('tab-active');
+      currentTab = tab;
+      document.getElementById('result-area').classList.add('hidden');
+    }
+
+    // Token
+    function toggleToken() {
+      const panel = document.getElementById('tokenPanel');
+      panel.classList.toggle('hidden');
+    }
+
+    document.getElementById('tokenInput').addEventListener('input', (e) => {
+      const v = e.target.value;
+      const label = document.getElementById('tokenLabel');
+      label.textContent = v ? 'Token Set' : 'Set Token';
+      document.getElementById('tokenBtn').classList.toggle('bg-green-900/30', !!v);
+      document.getElementById('tokenBtn').classList.toggle('border-green-500/30', !!v);
+    });
+
+    // Quality slider
+    document.getElementById('t2i-quality').addEventListener('input', (e) => {
+      document.getElementById('t2i-qval').textContent = e.target.value;
+    });
+
+    // File upload helpers
+    function updateFiles(prefix) {
+      const input = document.getElementById(prefix === 'i2i' ? 'i2i-files' :
+                     prefix === 'r2v-img' ? 'r2v-imgs' : 'r2v-vids');
+      const preview = document.getElementById(prefix === 'i2i' ? 'i2i-preview' :
+                       prefix === 'r2v-img' ? 'r2v-img-preview' : 'r2v-vid-preview');
+      preview.innerHTML = '';
+      uploadedFiles[prefix] = [];
+      Array.from(input.files).forEach((f, i) => {
+        uploadedFiles[prefix].push(f);
+        const url = URL.createObjectURL(f);
+        const isVideo = f.type.startsWith('video');
+        preview.innerHTML += `<div class="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden">
+          ${isVideo ? `<video src="${url}" class="w-full h-full object-cover"/>` : `<img src="${url}" class="w-full h-full object-cover"/>`}
+          <span class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs text-center py-0.5">${i+1}</span>
+        </div>`;
+      });
+    }
+
+    function updateSingleFile(prefix) {
+      const inputId = prefix === 'i2v' ? 'i2v-file' : prefix === 'mimic-img' ? 'mimic-img' : 'mimic-vid';
+      const previewId = prefix === 'i2v' ? 'i2v-preview' : prefix === 'mimic-img' ? 'mimic-img-preview' : 'mimic-vid-preview';
+      const input = document.getElementById(inputId);
+      const preview = document.getElementById(previewId);
+      preview.innerHTML = '';
+      if (input.files.length) {
+        const f = input.files[0];
+        const url = URL.createObjectURL(f);
+        const isVideo = f.type.startsWith('video');
+        preview.innerHTML = `<div class="relative w-20 h-20 rounded-lg overflow-hidden">
+          ${isVideo ? `<video src="${url}" class="w-full h-full object-cover"/>` : `<img src="${url}" class="w-full h-full object-cover"/>`}
+        </div>`;
+        uploadedFiles[prefix] = f;
+      }
+    }
+
+    // Upload file to server
+    async function uploadToServer(file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/upload', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      return d.path;
+    }
+
+    // Show progress
+    function showProgress() {
+      document.getElementById('result-area').classList.remove('hidden');
+      document.getElementById('result-output').classList.add('hidden');
+      document.getElementById('result-output').innerHTML = '';
+      document.getElementById('progress-bar').style.width = '0%';
+      document.getElementById('progress-pct').textContent = '0%';
+      document.getElementById('status-text').textContent = 'Uploading & starting generation...';
+    }
+
+    function updateProgress(pct, text) {
+      document.getElementById('progress-bar').style.width = `${Math.round(pct*100)}%`;
+      document.getElementById('progress-pct').textContent = `${Math.round(pct*100)}%`;
+      if (text) document.getElementById('status-text').textContent = text;
+    }
+
+    function showResult(urls) {
+      const out = document.getElementById('result-output');
+      out.classList.remove('hidden');
+      if (!urls || urls.length === 0) {
+        out.innerHTML = '<p class="text-sm text-dark-400">No output returned</p>';
+        return;
+      }
+      let html = '';
+      urls.forEach(url => {
+        if (url.match(/\.(mp4|webm|mov)$/i) || url.includes('video')) {
+          html += `<video src="${url}" controls playsinline class="w-full rounded-xl mt-2" style="max-height:60vh"></video>
+                   <a href="${url}" download class="block mt-2 text-center text-sm text-accent-400 underline">Download Video</a>`;
+        } else {
+          html += `<img src="${url}" class="w-full rounded-xl mt-2 result-img"/>
+                   <a href="${url}" download class="block mt-2 text-center text-sm text-accent-400 underline">Download Image</a>`;
+        }
+      });
+      out.innerHTML = html;
+    }
+
+    // Poll task
+    async function pollTask(taskId) {
+      for (let i = 0; i < 120; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        try {
+          const r = await fetch(`/api/status/${taskId}`);
+          const d = await r.json();
+          if (d.status === 'completed') {
+            updateProgress(1.0, 'Done!');
+            showResult(d.output);
+            toast('Generation complete!', 'success');
+            return;
+          }
+          if (d.status === 'failed') {
+            updateProgress(0, `Failed: ${d.error || 'Unknown error'}`);
+            toast(d.error || 'Generation failed', 'error');
+            return;
+          }
+          updateProgress(d.progress || (i/120), 'Generating...');
+        } catch(e) {
+          // continue polling
+        }
+      }
+      toast('Polling timeout', 'error');
+    }
+
+    // Generate functions
+    async function generateT2I() {
+      const token = document.getElementById('tokenInput').value;
+      if (!token) { toast('Set your token first!', 'error'); toggleToken(); return; }
+      const prompt = document.getElementById('t2i-prompt').value;
+      if (!prompt) { toast('Enter a prompt!', 'error'); return; }
+
+      showProgress();
+      try {
+        const r = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            token, mode:'text2img', prompt,
+            model: document.getElementById('t2i-model').value,
+            aspect: document.getElementById('t2i-aspect').value,
+            resolution: document.getElementById('t2i-res').value,
+            numOutputs: document.getElementById('t2i-num').value,
+            quality: document.getElementById('t2i-quality').value
+          })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        pollTask(d.task_id);
+      } catch(e) {
+        updateProgress(0, `Error: ${e.message}`);
+        toast(e.message, 'error');
+      }
+    }
+
+    async function generateI2I() {
+      const token = document.getElementById('tokenInput').value;
+      if (!token) { toast('Set your token first!', 'error'); toggleToken(); return; }
+      const files = uploadedFiles['i2i'];
+      if (!files || !files.length) { toast('Upload images first!', 'error'); return; }
+
+      showProgress();
+      try {
+        updateProgress(0.05, 'Uploading images...');
+        const paths = [];
+        for (const f of files) paths.push(await uploadToServer(f));
+        updateProgress(0.15, 'Starting generation...');
+
+        const r = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            token, mode:'img2img', files: paths,
+            prompt: document.getElementById('i2i-prompt').value,
+            model: document.getElementById('i2i-model').value,
+            aspect: document.getElementById('i2i-aspect').value,
+            resolution: document.getElementById('i2i-res').value
+          })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        pollTask(d.task_id);
+      } catch(e) {
+        updateProgress(0, `Error: ${e.message}`);
+        toast(e.message, 'error');
+      }
+    }
+
+    async function generateI2V() {
+      const token = document.getElementById('tokenInput').value;
+      if (!token) { toast('Set your token first!', 'error'); toggleToken(); return; }
+      const file = uploadedFiles['i2v'];
+      if (!file) { toast('Upload an image first!', 'error'); return; }
+
+      showProgress();
+      try {
+        updateProgress(0.05, 'Uploading image...');
+        const path = await uploadToServer(file);
+        updateProgress(0.15, 'Starting generation...');
+
+        const r = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            token, mode:'img2vid', file: path,
+            prompt: document.getElementById('i2v-prompt').value,
+            model: document.getElementById('i2v-model').value,
+            length: document.getElementById('i2v-length').value,
+            aspect: document.getElementById('i2v-aspect').value,
+            audio: document.getElementById('i2v-audio').checked
+          })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        pollTask(d.task_id);
+      } catch(e) {
+        updateProgress(0, `Error: ${e.message}`);
+        toast(e.message, 'error');
+      }
+    }
+
+    async function generateR2V() {
+      const token = document.getElementById('tokenInput').value;
+      if (!token) { toast('Set your token first!', 'error'); toggleToken(); return; }
+      const imgs = uploadedFiles['r2v-img'] || [];
+      const vids = uploadedFiles['r2v-vid'] || [];
+      if (!imgs.length && !vids.length) { toast('Upload references first!', 'error'); return; }
+
+      showProgress();
+      try {
+        updateProgress(0.05, 'Uploading references...');
+        const imgPaths = [];
+        for (const f of imgs) imgPaths.push(await uploadToServer(f));
+        const vidPaths = [];
+        for (const f of vids) vidPaths.push(await uploadToServer(f));
+        updateProgress(0.15, 'Starting generation...');
+
+        const r = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            token, mode:'ref2vid', images: imgPaths, videos: vidPaths,
+            prompt: document.getElementById('r2v-prompt').value,
+            model: document.getElementById('r2v-model').value,
+            duration: document.getElementById('r2v-dur').value,
+            aspect: document.getElementById('r2v-aspect').value,
+            resolution: document.getElementById('r2v-res').value,
+            audio: document.getElementById('r2v-audio').checked,
+            seed: document.getElementById('r2v-seed').value
+          })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        pollTask(d.task_id);
+      } catch(e) {
+        updateProgress(0, `Error: ${e.message}`);
+        toast(e.message, 'error');
+      }
+    }
+
+    async function generateMimic() {
+      const token = document.getElementById('tokenInput').value;
+      if (!token) { toast('Set your token first!', 'error'); toggleToken(); return; }
+      const img = uploadedFiles['mimic-img'];
+      const vid = uploadedFiles['mimic-vid'];
+      if (!img || !vid) { toast('Upload both files!', 'error'); return; }
+
+      showProgress();
+      try {
+        updateProgress(0.05, 'Uploading files...');
+        const imgPath = await uploadToServer(img);
+        const vidPath = await uploadToServer(vid);
+        updateProgress(0.15, 'Starting generation...');
+
+        const r = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            token, mode:'mimic', image: imgPath, video: vidPath,
+            prompt: document.getElementById('mimic-prompt').value,
+            model: document.getElementById('mimic-model').value,
+            mode_param: document.getElementById('mimic-mode').value
+          })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        pollTask(d.task_id);
+      } catch(e) {
+        updateProgress(0, `Error: ${e.message}`);
+        toast(e.message, 'error');
+      }
+    }
+
+    // Toast
+    function toast(msg, type='info') {
+      const c = document.getElementById('toast-container');
+      const colors = { success:'bg-green-600', error:'bg-red-600', info:'bg-accent-600' };
+      const t = document.createElement('div');
+      t.className = `toast ${colors[type]||colors.info} text-white px-4 py-3 rounded-xl text-sm font-medium shadow-lg`;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 3000);
+    }
+
+    // Drag and drop
+    document.querySelectorAll('.drop-zone').forEach(zone => {
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        const input = zone.querySelector('input[type="file"]');
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event('change'));
+      });
+    });
+  </script>
+</body>
+</html>
